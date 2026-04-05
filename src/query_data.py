@@ -1,42 +1,80 @@
 import argparse
-from httpcore import stream
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 import ollama
+import logging
+from config import CHROMA_DB_PATH, EMBEDDING_MODEL, LANGUAGE_MODEL
 
-CHROMA_DB_PATH = "../db/chroma_db"
-EMBEDDING_MODEL = 'hf.co/CompendiumLabs/bge-base-en-v1.5-gguf'
-LANGUAGE_MODEL = 'hf.co/bartowski/Llama-3.2-1B-Instruct-GGUF'
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-PROMPT_TEMPLATE = """You are a helpful chatbot.
-Use only the following pieces of context to answer the question and stay within the bounds of the provided information. Don't make up any new information:
+PROMPT_TEMPLATE = """You are a helpful assistant. Answer using ONLY the context below.
+If the answer isn't in the context, say you don't know. Do not make anything up.
+
+Context:
 {context}
-If you don't know the answer, say you don't know. Always use all the relevant information from the provided context to answer the question."""
+"""
+class RAGChatBot:
+    def __init__(self, db_path=CHROMA_DB_PATH, embedding_model=EMBEDDING_MODEL, language_model=LANGUAGE_MODEL):
+        self.embedding_model = OllamaEmbeddings(model=embedding_model)
+        self.language_model = language_model
+        self.db = Chroma(persist_directory=db_path, embedding_function=self.embedding_model)
+        self.chat_history: list[dict] = []
+
+    def _retrieve_context(self, query, k=3):
+        results = self.db.similarity_search(query, k=k)
+        context_text = "\n\n---\n\n".join([doc.page_content for doc in results])
+        sources = list({
+            f"{doc.metadata.get('source', 'unknown')} (page {doc.metadata.get('page', '?')})"
+            for doc in results
+        })
+        return context_text, sources
+
+    def _build_messages(self, query: str, context: str) -> list[dict]:
+        system = {"role": "system", "content": PROMPT_TEMPLATE.format(context=context)}
+        return [system, *self.chat_history, {"role": "user", "content": query}]
+
+    def ask(self, query, k):
+        context, sources = self._retrieve_context(query)
+        messages = self._build_messages(query, context) 
+
+        response = ollama.chat(model=self.language_model, messages=messages, stream=True)
+
+        answer = ""
+        for chunk in response:
+            token = chunk["message"]["content"]
+            answer += token
+            print(token, end="", flush=True)
+        print()
+
+        self.chat_history.append({"role": "user", "content": query})
+        self.chat_history.append({"role": "assistant", "content": answer})
+        return answer, sources
+    
+    def clear_history(self):
+        self.chat_history.clear()
 
 def main():
-    query_text = input("\nAsk a question about the file: ")
-    
-    embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
-    db = Chroma(persist_directory=CHROMA_DB_PATH, embedding_function=embeddings)
-    
-    results = db.similarity_search(query_text, k=3)
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in results])
-    
-    full_prompt = PROMPT_TEMPLATE.format(context=context_text)
+    parser = argparse.ArgumentParser(description="RAG Chatbot")
+    parser.add_argument("--k", type=int, default=3)
+    args = parser.parse_args()
 
-    print("\nResponse:")
-    response = ollama.chat(
-        model=LANGUAGE_MODEL,
-        messages=[
-            {"role": "system", "content": full_prompt},
-            {"role": "user", "content": query_text},
-        ],
-        stream=True,
-    )
+    chatbot = RAGChatBot()
+    print("RAG Chatbot ready. Type 'quit' to exit, 'clear' to reset memory.\n")
 
-    for chunk in response:
-        print(chunk["message"]["content"], end="", flush=True)
-    print()
+    while True:
+        query_text = input("\nAsk a question about the file: ")
+        if query_text.lower() == "quit":
+            print("Goodbye!")
+            break
+        elif query_text.lower() == "clear":
+            chatbot.clear_history()
+            print("Chat history cleared.")
+            continue
+
+        answer, sources = chatbot.ask(query_text, k=args.k)
+        print(f"\nAnswer:\n{answer}")
+        print(f"Sources: {', '.join(sources)}")
 
 if __name__ == "__main__":
     main()
