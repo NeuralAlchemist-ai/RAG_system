@@ -1,47 +1,56 @@
 import os
 import shutil
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma 
+from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
+from config import CHROMA_DB_PATH, EMBEDDING_MODEL, DATA_PATH
+import logging
 
-DATA_PATH = "../data/"
-CHROMA_DB_PATH = "../db/chroma_db"
-EMBEDDING_MODEL = 'hf.co/CompendiumLabs/bge-base-en-v1.5-gguf'
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def main():
-    generate_data()
 
-def generate_data():
-    docs=load_document(DATA_PATH)
-    chunks=split_documents(docs)
-    save_to_db(chunks)
+class RAGDatabase:
+    def __init__(self, data_path=DATA_PATH, db_path=CHROMA_DB_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
+        self.data_path = data_path
+        self.db_path = db_path
+        self.embedding_model = OllamaEmbeddings(model=embedding_model)
+        self.format = format
+        self.loaders={
+            "pdf": PyPDFLoader,
+            "txt": TextLoader,
+            "md": UnstructuredMarkdownLoader
+        }
 
-def load_document(DATA_PATH):
-    loader = DirectoryLoader(DATA_PATH, glob="*.pdf", loader_cls=PyPDFLoader)
-    docs = loader.load()
-    return docs
+    def build(self):
+        docs=self._load_document()
+        chunks=self._split_documents(docs)
+        self._save_to_db(chunks)
 
-def split_documents(docs):
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=300,
-        chunk_overlap=100,
-        length_function=len,
-        add_start_index=True,
-    )
-    chunks = text_splitter.split_documents(docs)
-    print(f"Split {len(docs)} documents into {len(chunks)} chunks.")
+    def _load_document(self):
+        loader = DirectoryLoader(self.data_path, glob=f"*.{self.format}", loader_cls=self.loaders.get(self.format))
+        docs = loader.load()
+        return docs
 
-    return chunks
-def save_to_db(chunks):
-    if os.path.exists(CHROMA_DB_PATH):
-        shutil.rmtree(CHROMA_DB_PATH)
+    def _split_documents(self, docs):
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=700,
+            chunk_overlap=100,
+            length_function=len,
+            add_start_index=True,
+        )
+        chunks = text_splitter.split_documents(docs)
+        logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks.")
+        return chunks
+    
+    def _save_to_db(self, chunks):
+        if os.path.exists(self.db_path):
+            shutil.rmtree(self.db_path)
 
-    embedding = OllamaEmbeddings(model=EMBEDDING_MODEL)
-    db=Chroma.from_documents(chunks,embedding=embedding,persist_directory=CHROMA_DB_PATH)
-    print(f"Saved {len(chunks)} chunks to ChromaDB at {CHROMA_DB_PATH}.")
+        db=Chroma.from_documents(chunks,embedding=self.embedding_model,persist_directory=self.db_path)
+        logger.info(f"Saved {len(chunks)} chunks to ChromaDB at {self.db_path}.")
 
 
 if __name__ == "__main__":
-    main()
+    RAGDatabase().build()
