@@ -4,6 +4,7 @@ import logging
 from config import EMBEDDING_MODEL, LANGUAGE_MODEL, SUPABASE_DB_URL, RERANKING_MODEL
 from flashrank import Ranker, RerankRequest
 import vecs
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -44,12 +45,13 @@ class RAGChatBot:
         }
         return [system, *self.chat_history, {"role": "user", "content": query}]
 
-    def _retrieve_context(self, query: str, k: int = 3):
+    def _retrieve_context(self, query: str, user_id: str, k: int = 3):
 
         emb_query=self.embedding_model.embed_query(query)
         results=self.collection.query(
             data=emb_query,
             limit=k*3,
+            filters={"user_id": {"$eq": user_id}},
             include_metadata=True,
             include_value=False
         )        
@@ -71,9 +73,9 @@ class RAGChatBot:
         
         return context, sources
 
-    def ask(self, query, k=3):
-        context, sources = self._retrieve_context(query,k)
-        messages = self._build_messages(query, context) 
+    def ask(self, query: str, user_id: str, k: int = 3):
+        context, sources = self._retrieve_context(query, user_id, k)
+        messages = self._build_messages(query, context)
 
         response = ollama.chat(model=LANGUAGE_MODEL, messages=messages, stream=True)
 
@@ -94,6 +96,7 @@ class RAGChatBot:
 def main():
 
     chatbot = RAGChatBot()
+    user_id = "test_user"  
     print("RAG Chatbot ready. Type 'quit' to exit, 'clear' to reset memory.\n")
     try:
         while True:
@@ -106,7 +109,7 @@ def main():
                 print("Chat history cleared.")
                 continue
 
-            answer, sources = chatbot.ask(query_text, k=3)
+            answer, sources = chatbot.ask(query_text, user_id=user_id, k=3)
             print(f"\nAnswer:\n{answer}")
             print(f"Sources: {', '.join(sources)}")
     finally:
