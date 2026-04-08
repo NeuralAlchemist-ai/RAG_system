@@ -67,6 +67,7 @@ class Test:
 
     def evaluate(self):
         chatbot = RAGChatBot()
+        user_id = "test_user"  # For testing
         results = []
         total = 0
 
@@ -77,7 +78,7 @@ class Test:
         for i, case in enumerate(TEST_CASES):
             print(f"\n[{i+1}/{len(TEST_CASES)}] {case['question']}")
 
-            answer, sources = chatbot.ask(case["question"], k=3)
+            answer, sources = chatbot.ask(case["question"], user_id=user_id, k=3)
             chatbot.clear_history()
 
             score = self._semantic_similarity(case["expected"], answer)
