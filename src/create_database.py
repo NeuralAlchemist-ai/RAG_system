@@ -4,6 +4,8 @@ from langchain_ollama import OllamaEmbeddings
 import vecs
 from config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL
 import logging
+import os
+import uuid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,14 +27,25 @@ class RAGDatabase:
             "md": UnstructuredMarkdownLoader
         }
 
-    def build(self):
-        docs=self._load_document()
-        chunks=self._split_documents(docs)
-        self._save_to_db(chunks)
+    def build(self, file_path: str | None = None, user_id: str | None = None):
+        if file_path:
+            self.data_path = file_path
+            self.format = os.path.splitext(file_path)[1].lstrip(".").lower()
+
+        docs = self._load_document()
+        chunks = self._split_documents(docs)
+        self._save_to_db(chunks, user_id=user_id)
         self.vx.disconnect()
+        return len(chunks)
 
     def _load_document(self):
-        loader = DirectoryLoader(self.data_path, glob=f"*.{self.format}", loader_cls=self.loaders.get(self.format))
+        if os.path.isfile(self.data_path):
+            loader_cls = self.loaders.get(self.format)
+            if loader_cls is None:
+                raise ValueError(f"Unsupported file format: {self.format}")
+            loader = loader_cls(self.data_path)
+        else:
+            loader = DirectoryLoader(self.data_path, glob=f"*.{self.format}", loader_cls=self.loaders.get(self.format))
         docs = loader.load()
         return docs
 
@@ -47,17 +60,18 @@ class RAGDatabase:
         logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks.")
         return chunks
     
-    def _save_to_db(self, chunks):
+    def _save_to_db(self, chunks, user_id: str | None = None):
         records=[]
-        for i, chunk in enumerate(chunks):
+        for chunk in chunks:
             embedding = self.embedding_model.embed_query(chunk.page_content)
             records.append((
-                f"chunk_{i}",      
+                f"chunk_{uuid.uuid4()}",      
                 embedding,          
-                {                   
+                {
                     "content":  chunk.page_content,
                     "source":   chunk.metadata.get("source", "unknown"),
                     "page":     chunk.metadata.get("page", 0),
+                    "user_id":  user_id,
                 }
             ))
         batch_size=100
