@@ -1,5 +1,5 @@
 from groq import Groq
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import logging
 import json
 from src.config import EMBEDDING_MODEL, SUPABASE_DB_URL, GROQ_API_KEY, COLLECTION_NAME , LANGUAGE_MODEL
@@ -39,7 +39,7 @@ Passages:
 
 JSON array:"""
 
-_embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+_embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
 
 class RAGChatBot:
     def __init__(self, language_model=LANGUAGE_MODEL):

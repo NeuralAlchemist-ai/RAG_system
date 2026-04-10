@@ -1,6 +1,6 @@
 from langchain_community.document_loaders import DirectoryLoader, PDFMinerLoader, TextLoader, UnstructuredMarkdownLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import vecs
 from src.config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME
 import logging
@@ -10,7 +10,7 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-_embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+_embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
 
 class RAGDatabase:
     def __init__(self, data_path=DATA_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
