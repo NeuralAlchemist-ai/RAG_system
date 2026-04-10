@@ -1,6 +1,6 @@
 from query_data import RAGChatBot
 from config import EMBEDDING_MODEL
-import ollama
+from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
 import logging
 
@@ -48,7 +48,7 @@ class Test:
         self.model = EMBEDDING_MODEL
 
     def _get_embedding(self, text: str):
-        response = ollama.embeddings(model=self.model, prompt=text)
+        response = HuggingFaceEmbeddings(model_name=self.model).embed_query(text)
         return response['embedding']
     
     def _cos_sim(self, vec1, vec2):
@@ -67,7 +67,7 @@ class Test:
 
     def evaluate(self):
         chatbot = RAGChatBot()
-        user_id = "test_user"  # For testing
+        user_id = "test_user" 
         results = []
         total = 0
 

@@ -1,7 +1,7 @@
-from langchain_ollama import OllamaEmbeddings
-import ollama
+from groq import Groq
+from sentence_transformers import SentenceTransformer
 import logging
-from config import EMBEDDING_MODEL, LANGUAGE_MODEL, SUPABASE_DB_URL, RERANKING_MODEL
+from config import EMBEDDING_MODEL, LANGUAGE_MODEL, SUPABASE_DB_URL, RERANKING_MODEL , GROQ_API_KEY, COLLECTION_NAME
 from flashrank import Ranker, RerankRequest
 import vecs
 
@@ -29,14 +29,20 @@ ANSWER:"""
 
 class RAGChatBot:
     def __init__(self, embedding_model=EMBEDDING_MODEL, language_model=LANGUAGE_MODEL):
-        self.embedding_model = OllamaEmbeddings(model=embedding_model)
+        self.embedding_model = SentenceTransformer(embedding_model)
+        
+        test_embedding = self.embedding_model.encode("test")
+        embedding_dimension = len(test_embedding)
+        
         self.vx=vecs.create_client(SUPABASE_DB_URL)
         self.collection=self.vx.get_or_create_collection(
-            name="rag_collection",
-            dimension=768
+            name=COLLECTION_NAME,
+            dimension=embedding_dimension
         )
+        self.groq=Groq(api_key=GROQ_API_KEY)
+        self.language_model = language_model
         self.chat_history: list[dict] = []
-        self.ranker=Ranker(model_name=RERANKING_MODEL, cache_dir="opt/flashrank")
+        self.ranker=Ranker(model_name=RERANKING_MODEL, cache_dir="/tmp/flashrank")
 
     def _build_messages(self, query: str, context: str) -> list[dict]:
         system = {
@@ -47,7 +53,7 @@ class RAGChatBot:
 
     def _retrieve_context(self, query: str, user_id: str, k: int = 3):
 
-        emb_query=self.embedding_model.embed_query(query)
+        emb_query=self.embedding_model.encode(query)
         results=self.collection.query(
             data=emb_query,
             limit=k*3,
@@ -61,14 +67,18 @@ class RAGChatBot:
         ]
         
         rerank_request = RerankRequest(query=query, passages=passages)
-        results = self.ranker.rerank(rerank_request)
+        try:
+            results = self.ranker.rerank(rerank_request)
+        except Exception as e:
+            logger.warning(f"Reranking failed: {e}. Using original order.")
+            results = passages[:k*3] 
         
-        top_3 = results[:3]
+        top_k = results[:k]
         
-        context = "\n\n---\n\n".join([r['text'] for r in top_3])
+        context = "\n\n---\n\n".join([r['text'] for r in top_k])
         sources = list({
             f"{r['meta'].get('source', 'unknown')} (page {r['meta'].get('page', '?')})"
-            for r in top_3
+            for r in top_k
         })
         
         return context, sources
@@ -77,14 +87,19 @@ class RAGChatBot:
         context, sources = self._retrieve_context(query, user_id, k)
         messages = self._build_messages(query, context)
 
-        response = ollama.chat(model=LANGUAGE_MODEL, messages=messages, stream=True)
+        response = self.groq.chat.completions.create(
+            model=self.language_model,
+            messages=messages,
+            stream=True,
+            max_tokens=1024
+        )
 
         answer = ""
         for chunk in response:
-            token = chunk["message"]["content"]
-            answer += token
-            print(token, end="", flush=True)
-        print()
+            if chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                answer += token
+            
 
         self.chat_history.append({"role": "user", "content": query})
         self.chat_history.append({"role": "assistant", "content": answer})

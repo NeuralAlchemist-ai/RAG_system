@@ -1,8 +1,8 @@
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
+from sentence_transformers import SentenceTransformer
 import vecs
-from config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL
+from config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME
 import logging
 import os
 import uuid
@@ -14,12 +14,16 @@ logger = logging.getLogger(__name__)
 class RAGDatabase:
     def __init__(self, data_path=DATA_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
         self.data_path = data_path
+        self.embedding_model = SentenceTransformer(embedding_model)
+        
+        test_embedding = self.embedding_model.encode("test")
+        embedding_dimension = len(test_embedding)
+        
         self.vx=vecs.create_client(SUPABASE_DB_URL)
         self.collection=self.vx.get_or_create_collection(
-            name="rag_collection",
-            dimension=768
+            name=COLLECTION_NAME,
+            dimension=embedding_dimension
         )
-        self.embedding_model = OllamaEmbeddings(model=embedding_model)
         self.format = format
         self.loaders={
             "pdf": PyPDFLoader,
@@ -27,14 +31,14 @@ class RAGDatabase:
             "md": UnstructuredMarkdownLoader
         }
 
-    def build(self, file_path: str | None = None, user_id: str | None = None):
+    def build(self, file_path: str | None = None, user_id: str | None = None, original_file_name: str | None = None):
         if file_path:
             self.data_path = file_path
             self.format = os.path.splitext(file_path)[1].lstrip(".").lower()
 
         docs = self._load_document()
         chunks = self._split_documents(docs)
-        self._save_to_db(chunks, user_id=user_id)
+        self._save_to_db(chunks, user_id=user_id,original_file_name=original_file_name)
         self.vx.disconnect()
         return len(chunks)
 
@@ -60,16 +64,16 @@ class RAGDatabase:
         logger.info(f"Split {len(docs)} documents into {len(chunks)} chunks.")
         return chunks
     
-    def _save_to_db(self, chunks, user_id: str | None = None):
+    def _save_to_db(self, chunks, user_id: str | None = None, original_file_name: str | None = None):
         records=[]
         for chunk in chunks:
-            embedding = self.embedding_model.embed_query(chunk.page_content)
+            embedding = self.embedding_model.encode(chunk.page_content)
             records.append((
                 f"chunk_{uuid.uuid4()}",      
                 embedding,          
                 {
                     "content":  chunk.page_content,
-                    "source":   chunk.metadata.get("source", "unknown"),
+                    "source":   original_file_name or chunk.metadata.get("source", "unknown"),
                     "page":     chunk.metadata.get("page", 0),
                     "user_id":  user_id,
                 }
@@ -81,7 +85,10 @@ class RAGDatabase:
             logger.info(f"Uploaded {min(i + batch_size, len(records))}/{len(chunks)} chunks")
         
         logger.info(f"Saved {len(chunks)} chunks to the database.")
-        self.collection.create_index()
+        try:
+            self.collection.create_index()
+        except Exception:
+            pass
     
 if __name__ == "__main__":
     RAGDatabase().build()
