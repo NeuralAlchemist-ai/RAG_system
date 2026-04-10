@@ -1,5 +1,5 @@
-from query_data import RAGChatBot
-from config import EMBEDDING_MODEL
+from src.query_data import RAGChatBot
+from src.config import EMBEDDING_MODEL
 from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
 import logging
