@@ -1,8 +1,8 @@
 from groq import Groq
 from sentence_transformers import SentenceTransformer
 import logging
-from config import EMBEDDING_MODEL, LANGUAGE_MODEL, SUPABASE_DB_URL, RERANKING_MODEL , GROQ_API_KEY, COLLECTION_NAME
-from flashrank import Ranker, RerankRequest
+import json
+from src.config import EMBEDDING_MODEL, SUPABASE_DB_URL, GROQ_API_KEY, COLLECTION_NAME , LANGUAGE_MODEL
 import vecs
 
 logging.basicConfig(level=logging.INFO)
@@ -27,22 +27,62 @@ RULES:
 
 ANSWER:"""
 
+RERANK_PROMPT = """You are a relevance ranking assistant.
+Given a question and a list of text passages, return a JSON array of passage indices 
+sorted from MOST to LEAST relevant to the question.
+Return ONLY a valid JSON array of integers like [2, 0, 4, 1, 3]. Nothing else.
+
+Question: {question}
+
+Passages:
+{passages}
+
+JSON array:"""
+
+_embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+
 class RAGChatBot:
-    def __init__(self, embedding_model=EMBEDDING_MODEL, language_model=LANGUAGE_MODEL):
-        self.embedding_model = SentenceTransformer(embedding_model)
-        
-        test_embedding = self.embedding_model.encode("test")
-        embedding_dimension = len(test_embedding)
-        
-        self.vx=vecs.create_client(SUPABASE_DB_URL)
-        self.collection=self.vx.get_or_create_collection(
-            name=COLLECTION_NAME,
-            dimension=embedding_dimension
-        )
-        self.groq=Groq(api_key=GROQ_API_KEY)
+    def __init__(self, language_model=LANGUAGE_MODEL):
+        self.embedding_model = _embedding_model
+        self.groq = Groq(api_key=GROQ_API_KEY)
         self.language_model = language_model
         self.chat_history: list[dict] = []
-        self.ranker=Ranker(model_name=RERANKING_MODEL, cache_dir="/tmp/flashrank")
+
+        self.vx = vecs.create_client(SUPABASE_DB_URL)
+        self.collection = self.vx.get_or_create_collection(
+            name=COLLECTION_NAME,
+            dimension=self.embedding_model.get_sentence_embedding_dimension()
+        )
+
+    def _rerank(self, query: str, passages: list[dict], k: int) -> list[dict]:
+        formatted = "\n\n".join([
+            f"[{i}]: {p['text'][:300]}" 
+            for i, p in enumerate(passages)
+        ])
+
+        try:
+            response = self.groq.chat.completions.create(
+                model=self.language_model,
+                messages=[{
+                    "role": "user",
+                    "content": RERANK_PROMPT.format(
+                        question=query,
+                        passages=formatted
+                    )
+                }],
+                max_tokens=100,  
+                temperature=0.0   
+            )
+
+            raw = response.choices[0].message.content.strip()
+            indices = json.loads(raw)
+
+            reranked = [passages[i] for i in indices if i < len(passages)]
+            return reranked[:k]
+
+        except Exception as e:
+            logger.warning(f"Groq reranking failed: {e}. Using original order.")
+            return passages[:k]  
 
     def _build_messages(self, query: str, context: str) -> list[dict]:
         system = {
@@ -52,82 +92,47 @@ class RAGChatBot:
         return [system, *self.chat_history, {"role": "user", "content": query}]
 
     def _retrieve_context(self, query: str, user_id: str, k: int = 3):
+        emb_query = self.embedding_model.encode(query)
 
-        emb_query=self.embedding_model.encode(query)
-        results=self.collection.query(
+        results = self.collection.query(
             data=emb_query,
-            limit=k*3,
+            limit=k * 5,
             filters={"user_id": {"$eq": user_id}},
             include_metadata=True,
             include_value=False
-        )        
+        )
+
         passages = [
-        {"id": i, "text": meta["content"], "meta": meta}
-        for i, (_, meta) in enumerate(results)
+            {"id": i, "text": meta["content"], "meta": meta}
+            for i, (_, meta) in enumerate(results)
         ]
-        
-        rerank_request = RerankRequest(query=query, passages=passages)
-        try:
-            results = self.ranker.rerank(rerank_request)
-        except Exception as e:
-            logger.warning(f"Reranking failed: {e}. Using original order.")
-            results = passages[:k*3] 
-        
-        top_k = results[:k]
-        
-        context = "\n\n---\n\n".join([r['text'] for r in top_k])
+
+        top_k = self._rerank(query, passages, k)
+
+        context = "\n\n---\n\n".join([r["text"] for r in top_k])
         sources = list({
             f"{r['meta'].get('source', 'unknown')} (page {r['meta'].get('page', '?')})"
             for r in top_k
         })
-        
+
         return context, sources
 
-    def ask(self, query: str, user_id: str, k: int = 3):
+    def ask(self, query: str, user_id: str, k: int = 3) -> tuple[str, list]:
         context, sources = self._retrieve_context(query, user_id, k)
         messages = self._build_messages(query, context)
 
         response = self.groq.chat.completions.create(
             model=self.language_model,
             messages=messages,
-            stream=True,
-            max_tokens=1024
+            max_tokens=1024,
+            temperature=0.1
         )
 
-        answer = ""
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                token = chunk.choices[0].delta.content
-                answer += token
-            
+        answer = response.choices[0].message.content
 
         self.chat_history.append({"role": "user", "content": query})
         self.chat_history.append({"role": "assistant", "content": answer})
         return answer, sources
-    
+
     def clear_history(self):
         self.chat_history.clear()
-
-def main():
-
-    chatbot = RAGChatBot()
-    user_id = "test_user"  
-    print("RAG Chatbot ready. Type 'quit' to exit, 'clear' to reset memory.\n")
-    try:
-        while True:
-            query_text = input("\nAsk a question about the file: ")
-            if query_text.lower() == "quit":
-                print("Goodbye!")
-                break
-            elif query_text.lower() == "clear":
-                chatbot.clear_history()
-                print("Chat history cleared.")
-                continue
-
-            answer, sources = chatbot.ask(query_text, user_id=user_id, k=3)
-            print(f"\nAnswer:\n{answer}")
-            print(f"Sources: {', '.join(sources)}")
-    finally:
-        chatbot.vx.disconnect()
-if __name__ == "__main__":
-    main()
