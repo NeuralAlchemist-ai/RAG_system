@@ -1,11 +1,9 @@
 from fastapi import APIRouter
-from app.models import ChatRequest, ChatResponse
-from query_data import RAGChatBot
+from api.schemas import ChatRequest, ChatResponse
+from src.query_data import RAGChatBot
 
 router = APIRouter(prefix="/api/v1")
 
-# NOTE: sessions stored in memory — lost on server restart
-# future improvement: store chat_history in Redis or Supabase
 sessions: dict[str, RAGChatBot] = {}
 
 @router.post("/chat/",response_model=ChatResponse)
