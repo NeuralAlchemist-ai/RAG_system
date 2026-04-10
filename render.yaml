@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: rag-api
+    runtime: python
+    buildCommand: pip install uv && uv sync
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false
+  - type: web
+    name: rag-frontend
+    runtime: python
+    buildCommand: pip install uv && uv sync
+    startCommand: streamlit run streamlit_app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: API_URL
+        value: https://rag-api.onrender.com/api/v1
+        sync: false
