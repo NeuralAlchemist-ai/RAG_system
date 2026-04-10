@@ -21,28 +21,43 @@ st.set_page_config(
 with st.sidebar:
     st.header("Upload Document")
 
-    uploaded_file = st.file_uploader(
-        "Choose a document",
-        type=["pdf", "txt", "md"],
-        help="Upload a PDF, text, or markdown file"
-    )
+    uploaded_files = st.file_uploader(
+    "Choose documents",
+    type=["pdf", "txt", "md"],
+    accept_multiple_files=True   # ← key change
+)
 
-    if st.button("Process Document", type="primary"):
-        if uploaded_file is not None:
-            files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
-            try:
-                response = requests.post(f"{API_URL}/upload/document/", files=files)
-                if response.status_code == 200:
-                    data = response.json()
-                    st.session_state.user_id = data["user_id"]
-                    st.success(f"Document processed successfully! Created {data['chunks_created']} chunks.")
-                    st.info(f"User ID: {data['user_id']}")
-                else:
-                    st.error(f"Upload failed with status code: {response.status_code}")
-            except Exception as e:
-                st.error(f"Upload failed: {str(e)}")
+    if st.button("Process Documents", type="primary"):
+        if uploaded_files:
+            with st.spinner(f"Processing {len(uploaded_files)} file(s)..."):
+                files = [
+                    ("files", (f.name, f, f.type))
+                    for f in uploaded_files
+                ]
+                try:
+                    response = requests.post(
+                        f"{API_URL}/upload/documents/",
+                        files=files,
+                        params={"user_id": st.session_state.user_id} if st.session_state.user_id else {}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.session_state.user_id = data["user_id"]
+                        st.success(f"✅ Uploaded {data['uploaded']}/{len(uploaded_files)} files")
+
+                        # show per-file results
+                        for f in data["files"]:
+                            st.caption(f"📄 {f['filename']} — {f['chunks_created']} chunks")
+
+                        # show errors if any
+                        for err in data.get("errors", []):
+                            st.warning(f"⚠️ {err['filename']}: {err['error']}")
+                    else:
+                        st.error(f"Upload failed: {response.status_code}")
+                except requests.exceptions.Timeout:
+                    st.error("⏳ Server is waking up, please try again.")
         else:
-            st.error("Please select a file first")
+            st.warning("Please select at least one file.")
 
     st.divider()
 
