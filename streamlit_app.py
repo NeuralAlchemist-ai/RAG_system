@@ -4,6 +4,20 @@ import requests
 import uuid
 
 API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
+REQUEST_TIMEOUT = 60 
+
+try:
+    response = requests.post(
+        f"{API_URL}/chat/",
+        json={...},
+        timeout=REQUEST_TIMEOUT
+    )
+except requests.exceptions.Timeout:
+    st.error("⏳ Server is waking up, please try again in 30 seconds.")
+    st.stop()
+except requests.exceptions.ConnectionError:
+    st.error("❌ Cannot reach server. Check if backend is deployed.")
+    st.stop()
 
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
@@ -24,7 +38,7 @@ with st.sidebar:
     uploaded_files = st.file_uploader(
     "Choose documents",
     type=["pdf", "txt", "md"],
-    accept_multiple_files=True   # ← key change
+    accept_multiple_files=True 
 )
 
     if st.button("Process Documents", type="primary"):
@@ -45,11 +59,9 @@ with st.sidebar:
                         st.session_state.user_id = data["user_id"]
                         st.success(f"✅ Uploaded {data['uploaded']}/{len(uploaded_files)} files")
 
-                        # show per-file results
                         for f in data["files"]:
                             st.caption(f"📄 {f['filename']} — {f['chunks_created']} chunks")
 
-                        # show errors if any
                         for err in data.get("errors", []):
                             st.warning(f"⚠️ {err['filename']}: {err['error']}")
                     else:
