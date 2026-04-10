@@ -18,7 +18,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Sidebar
 with st.sidebar:
     st.header("Upload Document")
 
@@ -58,30 +57,25 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Failed to clear conversation: {str(e)}")
 
-# Main area
 st.markdown("# 📄 RAG Chatbot")
 
 if st.session_state.user_id is None:
     st.info("Please upload a document in the sidebar to start chatting")
 else:
-    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if "sources" in message and message["sources"]:
                 st.caption(f"Sources: {', '.join(message['sources'])}")
 
-    # Chat input
     if prompt := st.chat_input("Ask about your document..."):
         if st.session_state.user_id is None:
             st.error("Please upload a document first")
         else:
-            # Add user message
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            # Get assistant response
             try:
                 response = requests.post(
                     f"{API_URL}/chat/",
