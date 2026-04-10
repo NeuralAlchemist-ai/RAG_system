@@ -7,8 +7,10 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, "data")
 
-EMBEDDING_MODEL = "nomic-embed-text"
-LANGUAGE_MODEL =  "llama3.2:3b" 
-RERANKING_MODEL = "ms-marco-MiniLM-L-6-v2"
+EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
+COLLECTION_NAME = "rag_collection_v2"
+LANGUAGE_MODEL   = "llama-3.1-8b-instant"
+GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
+RERANKING_MODEL = "ms-marco-MiniLM-L-12-v2"
 
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")

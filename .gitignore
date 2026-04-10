@@ -10,6 +10,9 @@ __pycache__/
 db/
 opt/
 
+# Environment variables
+.env
+
 # Distribution / packaging
 .Python
 build/
