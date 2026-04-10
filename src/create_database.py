@@ -1,8 +1,8 @@
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
+from langchain_community.document_loaders import DirectoryLoader, PDFMinerLoader, TextLoader, UnstructuredMarkdownLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 import vecs
-from config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME
+from src.config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME
 import logging
 import os
 import uuid
@@ -10,12 +10,12 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_embedding_model = SentenceTransformer(EMBEDDING_MODEL)
 
 class RAGDatabase:
     def __init__(self, data_path=DATA_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
         self.data_path = data_path
-        self.embedding_model = SentenceTransformer(embedding_model)
-        
+        self.embedding_model = _embedding_model        
         test_embedding = self.embedding_model.encode("test")
         embedding_dimension = len(test_embedding)
         
@@ -26,7 +26,7 @@ class RAGDatabase:
         )
         self.format = format
         self.loaders={
-            "pdf": PyPDFLoader,
+            "pdf": PDFMinerLoader,
             "txt": TextLoader,
             "md": UnstructuredMarkdownLoader
         }
@@ -55,7 +55,7 @@ class RAGDatabase:
 
     def _split_documents(self, docs):
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=700,
+            chunk_size = 500,
             chunk_overlap=100,
             length_function=len,
             add_start_index=True,
