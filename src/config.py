@@ -11,6 +11,5 @@ EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "rag_collection_v2"
 LANGUAGE_MODEL   = "llama-3.1-8b-instant"
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
-RERANKING_MODEL = "ms-marco-MiniLM-L-12-v2"
 
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
