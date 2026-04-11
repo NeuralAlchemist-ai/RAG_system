@@ -95,7 +95,7 @@ else:
             response = requests.post(
                 f"{API_URL}/chat/",
                 json={
-                    "question":   str(prompt),                         
+                    "query":   str(prompt),                         
                     "user_id":    str(st.session_state.user_id),       
                     "session_id": str(st.session_state.session_id),     
                     "k":          3
