@@ -6,6 +6,13 @@ import uuid
 API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
 REQUEST_TIMEOUT = 60 
 
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    
 try:
     response = requests.post(
         f"{API_URL}/chat/",
@@ -19,12 +26,6 @@ except requests.exceptions.ConnectionError:
     st.error("❌ Cannot reach server. Check if backend is deployed.")
     st.stop()
 
-if "user_id" not in st.session_state:
-    st.session_state.user_id = None
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 st.set_page_config(
     page_title="RAG Chatbot",
