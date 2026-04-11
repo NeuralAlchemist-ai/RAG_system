@@ -221,11 +221,9 @@ create index on documents (user_id);
 
 ## 📈 Future Improvements
 
-- [ ] Add authentication (Supabase Auth)
-- [ ] Streaming responses to frontend via SSE
-- [ ] Conversation history persistence in database
-- [ ] Support for web URL ingestion
-- [ ] Evaluation dashboard with semantic similarity scores
+- [done] Conversation history persistence in database
+- [done] Evaluation dashboard with semantic similarity scores
+- [ ] Highlighting document sources
 - [ ] Docker containerization
 
 ---
