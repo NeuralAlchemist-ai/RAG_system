@@ -2,7 +2,7 @@ from langchain_community.document_loaders import DirectoryLoader, PDFMinerLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from fastembed import TextEmbedding
 import vecs
-from src.config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME
+from src.config import EMBEDDING_MODEL, DATA_PATH, SUPABASE_DB_URL, COLLECTION_NAME, CHUNK_OVERLAP, CHUNK_SIZE
 import logging
 import os
 import uuid
@@ -55,8 +55,8 @@ class RAGDatabase:
 
     def _split_documents(self, docs):
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size = 500,
-            chunk_overlap=100,
+            chunk_size = CHUNK_SIZE,
+            chunk_overlap=CHUNK_OVERLAP,
             length_function=len,
             add_start_index=True,
         )
