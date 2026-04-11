@@ -92,7 +92,7 @@ class RAGChatBot:
         return [system, *self.chat_history, {"role": "user", "content": query}]
 
     def _retrieve_context(self, query: str, user_id: str, k: int = 3):
-        emb_query = self.embedding_model.encode(query)
+        emb_query = list(self.embedding_model.embed([query]))[0]
 
         results = self.collection.query(
             data=emb_query,

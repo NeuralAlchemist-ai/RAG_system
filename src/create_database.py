@@ -16,7 +16,7 @@ class RAGDatabase:
     def __init__(self, data_path=DATA_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
         self.data_path = data_path
         self.embedding_model = _embedding_model        
-        test_embedding = self.embedding_model.encode("test")
+        test_embedding = list(self.embedding_model.embed(["test"]))[0]
         embedding_dimension = len(test_embedding)
         
         self.vx=vecs.create_client(SUPABASE_DB_URL)
@@ -65,9 +65,11 @@ class RAGDatabase:
         return chunks
     
     def _save_to_db(self, chunks, user_id: str | None = None, original_file_name: str | None = None):
+        texts = [chunk.page_content for chunk in chunks]
+        embeddings = list(self.embedding_model.embed(texts))
         records=[]
-        for chunk in chunks:
-            embedding = self.embedding_model.encode(chunk.page_content)
+        for i, chunk in enumerate(chunks):
+            embedding = embeddings[i]
             records.append((
                 f"chunk_{uuid.uuid4()}",      
                 embedding,          
