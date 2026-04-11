@@ -1,6 +1,5 @@
 # config.py
 import os
-import dotenv
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,3 +12,12 @@ LANGUAGE_MODEL   = "llama-3.1-8b-instant"
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
 
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+MAX_RETRIEVE = 20  
+MAX_RERANK   = 3   
+MAX_HISTORY  = 20 
+
+CHUNK_SIZE    = 800
+CHUNK_OVERLAP = int(CHUNK_SIZE * 0.15)                                   

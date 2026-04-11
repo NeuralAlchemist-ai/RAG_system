@@ -2,8 +2,9 @@ from groq import Groq
 from fastembed import TextEmbedding
 import logging
 import json
-from src.config import EMBEDDING_MODEL, SUPABASE_DB_URL, GROQ_API_KEY, COLLECTION_NAME , LANGUAGE_MODEL
+from src.config import EMBEDDING_MODEL, SUPABASE_DB_URL, GROQ_API_KEY, COLLECTION_NAME , LANGUAGE_MODEL, MAX_RERANK, MAX_RETRIEVE
 import vecs
+from src.history import clear_history,save_message
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class RAGChatBot:
             dimension=len(list(self.embedding_model.embed(["test"]))[0])
         )
 
-    def _rerank(self, query: str, passages: list[dict], k: int) -> list[dict]:
+    def _rerank(self, query: str, passages: list[dict]):
         formatted = "\n\n".join([
             f"[{i}]: {p['text'][:300]}" 
             for i, p in enumerate(passages)
@@ -93,11 +94,11 @@ class RAGChatBot:
             indices = json.loads(raw)
 
             reranked = [passages[i] for i in indices if i < len(passages)]
-            return reranked[:k]
+            return reranked[:MAX_RERANK]
 
         except Exception as e:
             logger.warning(f"Groq reranking failed: {e}. Using original order.")
-            return passages[:k]  
+            return passages[:MAX_RERANK]  
 
     def _build_messages(self, query: str, context: str) -> list[dict]:
         system = {
@@ -106,23 +107,23 @@ class RAGChatBot:
         }
         return [system, *self.chat_history, {"role": "user", "content": query}]
 
-    def _retrieve_context(self, query: str, user_id: str, k: int = 3):
+    def _retrieve_context(self, query: str, user_id: str):
         emb_query = list(self.embedding_model.embed([query]))[0]
 
         results = self.collection.query(
             data=emb_query,
-            limit=k * 5,
+            limit=MAX_RETRIEVE,
             filters={"user_id": {"$eq": user_id}},
             include_metadata=True,
-            include_value=False
+            include_value=True
         )
 
         passages = [
-            {"id": i, "text": meta["content"], "meta": meta}
-            for i, (_, meta) in enumerate(results)
+            {"id": i, "text": meta["content"], "score": score, "meta": meta}
+            for i, (_, score, meta) in enumerate(results)
         ]
 
-        top_k = self._rerank(query, passages, k)
+        top_k = self._rerank(query, passages)
 
         context = "\n\n---\n\n".join([r["text"] for r in top_k])
         sources = list({
@@ -131,9 +132,11 @@ class RAGChatBot:
         })
 
         return context, sources
+    
+    
 
-    def ask(self, query: str, user_id: str, k: int = 3) -> tuple[str, list]:
-        context, sources = self._retrieve_context(query, user_id, k)
+    def ask(self, query: str, user_id: str, session_id: str):
+        context, sources = self._retrieve_context(query, user_id)
         messages = self._build_messages(query, context)
 
         response = self.groq.chat.completions.create(
@@ -147,7 +150,12 @@ class RAGChatBot:
 
         self.chat_history.append({"role": "user", "content": query})
         self.chat_history.append({"role": "assistant", "content": answer})
+
+        save_message(session_id=session_id, user_id=user_id, role="user", content=query)
+        save_message(session_id=session_id, user_id=user_id, role="assistant", content=answer, sources=sources)
+
         return answer, sources
 
-    def clear_history(self):
+    def clear_history(self,session_id: str):
         self.chat_history.clear()
+        clear_history(session_id=session_id)
