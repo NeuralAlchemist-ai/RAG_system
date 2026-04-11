@@ -9,35 +9,50 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 RAG_PROMPT_TEMPLATE = """
-You are a specialized AI assistant. Your answer must be based STRICTLY on the provided context.
+You are a highly accurate AI assistant.
 
-CONTEXT (most relevant excerpts):
+Answer the question using ONLY the provided context.
+
+CONTEXT:
 {context}
 
 QUESTION:
 {question}
 
-RULES:
-1. Use ONLY the context provided above. Do not add any external knowledge.
-2. If the context contains the answer, you MUST provide it. Only say you don't know 
-   if after careful reading the answer is truly absent.
-3. Be concise and precise. If asked for a number or date, state it directly.
-4. Never contradict yourself — do not say information is missing if you then quote it.
-5. Always respond in the same language the question was asked in.
+INSTRUCTIONS:
+1. Base your answer strictly on the context.
+2. If the answer is partially available, provide the available information.
+3. If the answer is completely missing, say: "I don't know based on the provided context."
+4. Do NOT use external knowledge.
+5. Be concise, factual, and direct.
+6. If possible, quote or reference relevant parts of the context.
+7. If multiple answers exist, list them clearly.
+8. Always respond in the same language as the question.
 
-ANSWER:"""
+ANSWER:
+"""
 
-RERANK_PROMPT = """You are a relevance ranking assistant.
-Given a question and a list of text passages, return a JSON array of passage indices 
-sorted from MOST to LEAST relevant to the question.
-Return ONLY a valid JSON array of integers like [2, 0, 4, 1, 3]. Nothing else.
 
-Question: {question}
+
+RERANK_PROMPT = """You are a ranking system.
+
+Task:
+Rank the passages by relevance to the question.
+
+Rules:
+- Return ONLY a JSON array of indices
+- No explanation, no text
+- Must be valid JSON
+- Highest relevance first
+
+Question:
+{question}
 
 Passages:
 {passages}
 
-JSON array:"""
+Output:
+"""
 
 _embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
 
@@ -51,7 +66,7 @@ class RAGChatBot:
         self.vx = vecs.create_client(SUPABASE_DB_URL)
         self.collection = self.vx.get_or_create_collection(
             name=COLLECTION_NAME,
-            dimension=self.embedding_model.get_sentence_embedding_dimension()
+            dimension=len(list(self.embedding_model.embed(["test"]))[0])
         )
 
     def _rerank(self, query: str, passages: list[dict], k: int) -> list[dict]:
