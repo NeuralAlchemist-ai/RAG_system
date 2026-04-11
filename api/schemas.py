@@ -2,10 +2,9 @@ from pydantic import BaseModel
 from typing import List
 
 class ChatRequest(BaseModel):
-    query: str
+    question: str
     user_id: str
     session_id: str
-    k: int = 3
 
 class ChatResponse(BaseModel):
     answer: str
