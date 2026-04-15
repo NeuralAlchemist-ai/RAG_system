@@ -14,12 +14,70 @@ REQUEST_TIMEOUT = 60
 
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
+if "access_token" not in st.session_state:
+    st.session_state.access_token = None
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+def auth_headers() -> dict:
+    if st.session_state.access_token:
+        return {"Authorization": f"Bearer {st.session_state.access_token}"}
+    return {}
+
+if st.session_state.access_token is None:
+    st.markdown("# RAG Chatbot")
+    
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    
+    with tab1:
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+        if st.button("Login"):
+            try:
+                response = requests.post(
+                    f"{API_URL}/auth/login/",
+                    json={"email": email, "password": password},
+                    timeout=REQUEST_TIMEOUT
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    st.session_state.access_token = data["access_token"]
+                    st.session_state.user_id = data["user_id"]
+                    st.rerun()
+                else:
+                    st.error(f"Login failed: {response.json().get('detail', 'Unknown error')}")
+            except Exception as e:
+                st.error(f"Login failed: {str(e)}")
+    
+    with tab2:
+        email = st.text_input("Email", key="signup_email")
+        password = st.text_input("Password", type="password", key="signup_password")
+        if st.button("Create Account"):
+            try:
+                response = requests.post(
+                    f"{API_URL}/auth/signup/",
+                    json={"email": email, "password": password},
+                    timeout=REQUEST_TIMEOUT
+                )
+                if response.status_code == 200:
+                    st.success("Account created! Please login.")
+                else:
+                    st.error(f"Sign up failed: {response.json().get('detail', 'Unknown error')}")
+            except Exception as e:
+                st.error(f"Sign up failed: {str(e)}")
+    
+    st.stop()
+
 with st.sidebar:
+    st.caption(f"Logged in as: {st.session_state.user_id}")
+    if st.button("Logout"):
+        st.session_state.access_token = None
+        st.session_state.user_id = None
+        st.session_state.messages = []
+        st.rerun()
+    
     st.header("📂 Upload Documents")
 
     uploaded_files = st.file_uploader(
@@ -39,7 +97,7 @@ with st.sidebar:
                     response = requests.post(
                         f"{API_URL}/upload/documents/",
                         files=files,
-                        params={"user_id": str(st.session_state.user_id)} if st.session_state.user_id else {},
+                        headers=auth_headers(),
                         timeout=REQUEST_TIMEOUT
                     )
                     if response.status_code == 200:
@@ -81,6 +139,7 @@ with st.sidebar:
             try:
                 response = requests.get(
                     f"{API_URL}/chat/{st.session_state.session_id}/history",
+                    headers=auth_headers(),
                     timeout=REQUEST_TIMEOUT
                 )
                 if response.status_code == 200:
@@ -106,6 +165,7 @@ with st.sidebar:
         try:
             response = requests.delete(
                 f"{API_URL}/chat/{str(st.session_state.session_id)}",
+                headers=auth_headers(),
                 timeout=REQUEST_TIMEOUT
             )
             if response.status_code == 200:
@@ -143,9 +203,9 @@ else:
                 f"{API_URL}/chat/",
                 json={
                     "query":   str(prompt),                        
-                    "user_id":    str(st.session_state.user_id),
                     "session_id": str(st.session_state.session_id),
                 },
+                headers=auth_headers(),
                 timeout=REQUEST_TIMEOUT
             )
 
