@@ -205,7 +205,20 @@ create table documents (
 create index on documents using ivfflat (embedding vector_cosine_ops) with (lists = 100);
 create index on documents (user_id);
 ```
+```sql
+create table chat_history (
+    id         bigserial primary key,
+    session_id text not null,
+    user_id    text not null,
+    role       text not null,
+    content    text not null,
+    sources    jsonb default '[]',
+    created_at timestamp default now()
+);
 
+create index on chat_history (session_id);
+create index on chat_history (user_id);
+```
 ---
 
 ## 🧪 What I Learned Building This
@@ -223,8 +236,9 @@ create index on documents (user_id);
 
 - [done] Conversation history persistence in database
 - [done] Evaluation dashboard with semantic similarity scores
-- [ ] Highlighting document sources
-- [ ] Docker containerization
+- [done] Highlighting document sources
+- [ ] Authorization
+  
 
 ---
 
