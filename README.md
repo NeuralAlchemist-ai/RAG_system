@@ -139,7 +139,7 @@ RAG_system/
 | `POST` | `/api/v1/chat/` | Ask a question |
 | `DELETE` | `/api/v1/chat/{session_id}` | Clear conversation history |
 
-Full interactive documentation: `https://your-api.onrender.com/docs`
+Full interactive documentation: `https://rag-system-mac0.onrender.com/docs`
 
 ---
 
