@@ -132,6 +132,8 @@ RAG_system/
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Health check |
+| `POST` | `/api/v1/auth/signup/` | Sign up new user |
+| `POST` | `/api/v1/auth/login/` | Log in user |
 | `POST` | `/api/v1/upload/document/` | Upload single document |
 | `POST` | `/api/v1/upload/documents/` | Upload multiple documents |
 | `GET` | `/api/v1/upload/documents/` | List user's documents |
