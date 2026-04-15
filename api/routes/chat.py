@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from api.schemas import ChatRequest, ChatResponse
+from api.dependencies import get_current_user
 from src.query_data import RAGChatBot
 from src.history import load_history
 
@@ -9,7 +10,7 @@ sessions: dict[str, RAGChatBot] = {}
 
 
 @router.post("/chat/", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     if request.session_id not in sessions:
         sessions[request.session_id] = RAGChatBot()
         history = load_history(request.session_id)
@@ -19,9 +20,10 @@ async def chat(request: ChatRequest):
             sessions[request.session_id].chat_history = []
 
     chatbot = sessions[request.session_id]
+    real_user_id = str(current_user.id)
     answer, sources = chatbot.ask(
         request.question,             
-        user_id=request.user_id,
+        user_id=real_user_id,
         session_id=request.session_id
     )
     return ChatResponse(
@@ -32,7 +34,7 @@ async def chat(request: ChatRequest):
 
 
 @router.get("/chat/{session_id}/history") 
-async def get_history(session_id: str):
+async def get_history(session_id: str, current_user: dict = Depends(get_current_user)):
     messages = load_history(session_id)
     return {
         "messages": [
@@ -47,7 +49,7 @@ async def get_history(session_id: str):
 
 
 @router.delete("/chat/{session_id}")
-async def clear_history(session_id: str):
+async def clear_history(session_id: str, current_user: dict = Depends(get_current_user)):
     if session_id in sessions:
         sessions[session_id].clear_history(session_id=session_id)
         return {"message": "History cleared"}
