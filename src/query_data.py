@@ -135,7 +135,7 @@ class RAGChatBot:
     
     
 
-    def ask(self, query: str, user_id: str, session_id: str):
+    def ask(self, query: str, user_id: str):
         context, sources = self._retrieve_context(query, user_id)
         messages = self._build_messages(query, context)
 
@@ -151,11 +151,11 @@ class RAGChatBot:
         self.chat_history.append({"role": "user", "content": query})
         self.chat_history.append({"role": "assistant", "content": answer})
 
-        save_message(session_id=session_id, user_id=user_id, role="user", content=query)
-        save_message(session_id=session_id, user_id=user_id, role="assistant", content=answer, sources=sources)
+        save_message(user_id=user_id, role="user", content=query)
+        save_message(user_id=user_id, role="assistant", content=answer, sources=sources)
 
         return answer, sources
 
-    def clear_history(self,session_id: str):
+    def clear_history(self, user_id: str):
         self.chat_history.clear()
-        clear_history(session_id=session_id)
+        clear_history(user_id=user_id)
