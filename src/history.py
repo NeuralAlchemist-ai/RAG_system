@@ -1,4 +1,4 @@
-from supabase import create_client, Client
+from supabase import create_client
 from src.config import SUPABASE_URL, SUPABASE_KEY, MAX_HISTORY
 import logging
 
@@ -10,7 +10,6 @@ def get_supabase():
     return _supabase
 
 def save_message(
-    session_id: str,
     user_id: str,
     role: str,
     content: str,
@@ -19,41 +18,40 @@ def save_message(
     try:
         supabase = get_supabase()
         supabase.table("chat_history").insert({
-            "session_id": session_id,
             "user_id":    user_id,
             "role":       role,
             "content":    content,
             "sources":    sources or [],
         }).execute()
-        logger.info(f"Saved {role} message for session {session_id}")
+        logger.info(f"Saved {role} message for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to save message: {e}")
 
-def load_history(session_id: str) -> list[dict]:
+def load_history(user_id: str) -> list[dict]:
     try:
         supabase = get_supabase()
         response = (
         supabase.table("chat_history")
         .select("role, content")
-        .eq("session_id", session_id)
+        .eq("user_id", user_id)
         .order("created_at", desc=False)
         .limit(MAX_HISTORY)           
         .execute()
     )
         if response.data:
-            logger.info(f"Loaded {len(response.data)} messages for session {session_id}")
+            logger.info(f"Loaded {len(response.data)} messages for session {user_id}")
             return [{"role": r["role"], "content": r["content"]} for r in response.data]
         else:
-            logger.warning(f"Failed to load history: {response.status_code} - {response.text}")
+            logger.warning(f"Failed to load history: {response} - {response.text}")
             return []
     except Exception as e:
         logger.error(f"Error loading history: {e}")
         return []
     
-def clear_history(session_id: str) -> None:
+def clear_history(user_id: str) -> None:
     try:
         supabase = get_supabase()
-        supabase.table("chat_history").delete().eq("session_id", session_id).execute()
-        logger.info(f"Cleared history for session {session_id}")
+        supabase.table("chat_history").delete().eq("user_id", user_id).execute()
+        logger.info(f"Cleared history for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to clear history: {e}")
