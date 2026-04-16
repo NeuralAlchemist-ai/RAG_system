@@ -48,7 +48,6 @@ async def upload_documents(files: List[UploadFile] = File(...), current_user: di
 
 
 async def _process_file(file: UploadFile, user_id: str | None) -> dict:
-    """Shared logic for processing a single file — used by both routes."""
     if file.content_type not in ALLOWED_FILE_TYPES:
         raise HTTPException(status_code=400, detail=f"{file.filename}: Unsupported file type.")
 
@@ -81,7 +80,8 @@ async def _process_file(file: UploadFile, user_id: str | None) -> dict:
 
 
 @router.get("/documents/")
-async def list_documents(user_id: str):
+async def list_documents(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user.id)
     db = RAGDatabase()
     results = db.collection.query(
         data=[0.0] * 384,
@@ -95,8 +95,9 @@ async def list_documents(user_id: str):
     return {"user_id": user_id, "documents": sources}
 
 
-@router.delete("/documents/{user_id}")
-async def delete_documents(user_id: str):
+@router.delete("/documents/")
+async def delete_documents(current_user: dict = Depends(get_current_user)):
+    user_id = str(current_user.id)
     db = RAGDatabase()
     db.collection.delete(filters={"user_id": {"$eq": user_id}})
     db.vx.disconnect()
