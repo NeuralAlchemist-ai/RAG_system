@@ -16,8 +16,6 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "access_token" not in st.session_state:
     st.session_state.access_token = None
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -25,6 +23,23 @@ def auth_headers() -> dict:
     if st.session_state.access_token:
         return {"Authorization": f"Bearer {st.session_state.access_token}"}
     return {}
+
+
+def load_history():
+    if not st.session_state.user_id:
+        return
+    try:
+        response = requests.get(
+            f"{API_URL}/chat/history",
+            headers=auth_headers(),
+            timeout=REQUEST_TIMEOUT
+        )
+        if response.status_code == 200:
+            st.session_state.messages = response.json().get("messages", [])
+        else:
+            st.session_state.messages = []
+    except Exception:
+        st.session_state.messages = []
 
 if st.session_state.access_token is None:
     st.markdown("# RAG Chatbot")
@@ -45,6 +60,7 @@ if st.session_state.access_token is None:
                     data = response.json()
                     st.session_state.access_token = data["access_token"]
                     st.session_state.user_id = data["user_id"]
+                    load_history()
                     st.rerun()
                 else:
                     st.error(f"Login failed: {response.json().get('detail', 'Unknown error')}")
@@ -122,49 +138,56 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("♻️ Restore Session")
-    existing_user_id = st.text_input(
-        "User ID",
-        placeholder="Paste your User ID to restore documents"
-    )
-    existing_session_id = st.text_input(
-        "Session ID",
-        placeholder="Paste your Session ID to restore chat"
-    )
-    if st.button("Restore Session"):
-        if existing_user_id:
-            st.session_state.user_id = existing_user_id.strip()
-        if existing_session_id:
-            st.session_state.session_id = existing_session_id.strip()
-            try:
-                response = requests.get(
-                    f"{API_URL}/chat/{st.session_state.session_id}/history",
-                    headers=auth_headers(),
-                    timeout=REQUEST_TIMEOUT
-                )
-                if response.status_code == 200:
-                    st.session_state.messages = response.json().get("messages", [])
-                    st.success("✅ Session restored!")
+    st.header("📋 Document Management")
+
+    if st.button("📄 List My Documents"):
+        try:
+            response = requests.get(
+                f"{API_URL}/upload/documents/",
+                headers=auth_headers(),
+                timeout=REQUEST_TIMEOUT
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data["documents"]:
+                    st.success(f"Found {len(data['documents'])} document(s):")
+                    for doc in data["documents"]:
+                        st.caption(f"📄 {doc}")
                 else:
-                    st.session_state.messages = []
-                    st.info("No previous messages found for this session.")
-            except Exception as e:
-                st.error(f"Failed to restore session: {str(e)}")
-        else:
-            st.warning("Please enter at least a User ID.")
+                    st.info("No documents found.")
+            else:
+                st.error(f"Failed to list documents: {response.status_code}")
+        except requests.exceptions.Timeout:
+            st.error("⏳ Server is waking up, please try again.")
+        except requests.exceptions.ConnectionError:
+            st.error("❌ Cannot reach server.")
+        except Exception as e:
+            st.error(f"Failed to list documents: {str(e)}")
 
-    st.divider()
-
-    st.subheader("🔑 Current Session")
-    st.caption(f"User ID: `{st.session_state.user_id or 'not set'}`")
-    st.caption(f"Session ID: `{st.session_state.session_id}`")
+    if st.button("🗑️ Delete All Documents", type="secondary"):
+        try:
+            response = requests.delete(
+                f"{API_URL}/upload/documents/",
+                headers=auth_headers(),
+                timeout=REQUEST_TIMEOUT
+            )
+            if response.status_code == 200:
+                st.success("All documents deleted successfully.")
+            else:
+                st.error(f"Failed to delete documents: {response.status_code}")
+        except requests.exceptions.Timeout:
+            st.error("⏳ Server is waking up, please try again.")
+        except requests.exceptions.ConnectionError:
+            st.error("❌ Cannot reach server.")
+        except Exception as e:
+            st.error(f"Failed to delete documents: {str(e)}")
 
     st.divider()
 
     if st.button("🗑️ Clear Conversation"):
         try:
             response = requests.delete(
-                f"{API_URL}/chat/{str(st.session_state.session_id)}",
+                f"{API_URL}/chat/history",
                 headers=auth_headers(),
                 timeout=REQUEST_TIMEOUT
             )
@@ -180,6 +203,9 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Failed to clear: {str(e)}")
 
+
+if st.session_state.access_token is not None and not st.session_state.messages:
+    load_history()
 
 st.markdown("# 📄 RAG Chatbot")
 
@@ -202,8 +228,7 @@ else:
             response = requests.post(
                 f"{API_URL}/chat/",
                 json={
-                    "query":   str(prompt),                        
-                    "session_id": str(st.session_state.session_id),
+                    "question": str(prompt),                        
                 },
                 headers=auth_headers(),
                 timeout=REQUEST_TIMEOUT
