@@ -11,31 +11,27 @@ sessions: dict[str, RAGChatBot] = {}
 
 @router.post("/chat/", response_model=ChatResponse)
 async def chat(request: ChatRequest, current_user: dict = Depends(get_current_user)):
-    if request.session_id not in sessions:
-        sessions[request.session_id] = RAGChatBot()
-        history = load_history(request.session_id)
-        if history:
-            sessions[request.session_id].chat_history = history
-        else:
-            sessions[request.session_id].chat_history = []
-
-    chatbot = sessions[request.session_id]
     real_user_id = str(current_user.id)
+
+    if real_user_id not in sessions:
+        sessions[real_user_id] = RAGChatBot()
+        history = load_history(user_id=real_user_id)
+        sessions[real_user_id].chat_history = history or []
+
+    chatbot = sessions[real_user_id]
     answer, sources = chatbot.ask(
-        request.question,             
+        request.question,
         user_id=real_user_id,
-        session_id=request.session_id
     )
     return ChatResponse(
         answer=answer,
-        sources=sources,
-        session_id=request.session_id
+        sources=sources
     )
 
 
-@router.get("/chat/{session_id}/history") 
-async def get_history(session_id: str, current_user: dict = Depends(get_current_user)):
-    messages = load_history(session_id)
+@router.get("/chat/history") 
+async def get_history(current_user: dict = Depends(get_current_user)):
+    messages = load_history(user_id=str(current_user.id))
     return {
         "messages": [
             {
@@ -48,9 +44,11 @@ async def get_history(session_id: str, current_user: dict = Depends(get_current_
     }
 
 
-@router.delete("/chat/{session_id}")
-async def clear_history(session_id: str, current_user: dict = Depends(get_current_user)):
-    if session_id in sessions:
-        sessions[session_id].clear_history(session_id=session_id)
-        return {"message": "History cleared"}
-    return {"message": "Session not found"}
+@router.delete("/chat/history")
+async def clear_history(current_user: dict = Depends(get_current_user)):
+    real_user_id = str(current_user.id)
+    if real_user_id in sessions:
+        sessions[real_user_id].clear_history(user_id=real_user_id)
+    from src.history import clear_history as clear_db_history
+    clear_db_history(user_id=real_user_id)
+    return {"message": "History cleared"}
