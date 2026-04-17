@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _embedding_model = TextEmbedding(model_name=EMBEDDING_MODEL)
 
 class RAGDatabase:
-    def __init__(self, data_path=DATA_PATH, embedding_model=EMBEDDING_MODEL,format="pdf"):
+    def __init__(self, data_path=DATA_PATH, format="pdf"):
         self.data_path = data_path
         self.embedding_model = _embedding_model        
         test_embedding = list(self.embedding_model.embed(["test"]))[0]
@@ -47,9 +47,19 @@ class RAGDatabase:
             loader_cls = self.loaders.get(self.format)
             if loader_cls is None:
                 raise ValueError(f"Unsupported file format: {self.format}")
+            if self.format == "pdf":
+                loader = loader_cls(self.data_path, concatenate_pages=False)
+            else:
+                loader = loader_cls(self.data_path)             
             loader = loader_cls(self.data_path)
         else:
-            loader = DirectoryLoader(self.data_path, glob=f"*.{self.format}", loader_cls=self.loaders.get(self.format))
+            loader_kwargs = {"concatenate_pages": False} if self.format == "pdf" else {}
+            loader = DirectoryLoader(
+                self.data_path, 
+                glob=f"*.{self.format}", 
+                loader_cls=self.loaders.get(self.format),
+                loader_kwargs=loader_kwargs
+            )
         docs = loader.load()
         return docs
 

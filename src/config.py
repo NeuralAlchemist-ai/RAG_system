@@ -19,5 +19,5 @@ MAX_RETRIEVE = 20
 MAX_RERANK   = 3   
 MAX_HISTORY  = 20 
 
-CHUNK_SIZE    = 800
+CHUNK_SIZE    = 1000
 CHUNK_OVERLAP = int(CHUNK_SIZE * 0.15)                                   
