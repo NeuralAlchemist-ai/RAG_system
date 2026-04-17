@@ -139,7 +139,7 @@ RAG_system/
 | `GET` | `/api/v1/upload/documents/` | List user's documents |
 | `DELETE` | `/api/v1/upload/documents/{user_id}` | Delete user's documents |
 | `POST` | `/api/v1/chat/` | Ask a question |
-| `DELETE` | `/api/v1/chat/{session_id}` | Clear conversation history |
+| `DELETE` | `/api/v1/chat/` | Clear conversation history |
 
 Full interactive documentation: `https://rag-system-mac0.onrender.com/docs`
 
@@ -173,6 +173,8 @@ cp .env.example .env
 ```env
 GROQ_API_KEY=your_groq_key
 SUPABASE_DB_URL=postgresql://postgres:password@db.xxx.supabase.co:5432/postgres
+SUPABASE_URL=your_url
+SUPABASE_KEY=your_key
 COLLECTION_NAME=rag_collection
 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 LANGUAGE_MODEL=llama-3.1-8b-instant
@@ -210,7 +212,6 @@ create index on documents (user_id);
 ```sql
 create table chat_history (
     id         bigserial primary key,
-    session_id text not null,
     user_id    text not null,
     role       text not null,
     content    text not null,
@@ -239,7 +240,8 @@ create index on chat_history (user_id);
 - [done] Conversation history persistence in database
 - [done] Evaluation dashboard with semantic similarity scores
 - [done] Highlighting document sources
-- [ ] Authorization
+- [done] Authorization
+- [ ] MCP server
   
 
 ---
