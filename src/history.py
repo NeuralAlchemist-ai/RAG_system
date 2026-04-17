@@ -42,7 +42,7 @@ def load_history(user_id: str) -> list[dict]:
             logger.info(f"Loaded {len(response.data)} messages for session {user_id}")
             return [{"role": r["role"], "content": r["content"]} for r in response.data]
         else:
-            logger.warning(f"Failed to load history: {response} - {response.text}")
+            logger.warning(f"Failed to load history")
             return []
     except Exception as e:
         logger.error(f"Error loading history: {e}")
