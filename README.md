@@ -1,4 +1,4 @@
-# 📄 RAG System — AI-Powered Document Q&A
+# RAG System — AI-Powered Document Q&A
 
 > A production-ready Retrieval-Augmented Generation (RAG) system that lets users upload documents and chat with them using state-of-the-art AI. Built with a full cloud stack: FastAPI backend, Streamlit frontend, Supabase vector database, and Groq LLM inference.
 
